@@ -269,7 +269,7 @@ export class RPTTractUI {
         this.noseDiameter = new Float64Array(this.noseLength);
         for (let i = 0; i < this.noseLength; i++) {
             let diameter;
-            let d = 2 * (i / this.noseLength);
+            const d = 2 * (i / this.noseLength);
             if (d < 1) diameter = 0.4 + 1.6 * d;
             else diameter = 0.5 + 1.5 * (2 - d);
             diameter = Math.min(diameter, 1.9);
@@ -299,8 +299,8 @@ export class RPTTractUI {
         
         this.drawTongueControl();
         
-        let velum = this.tract.velum;
-        let velumAngle = velum * 4;
+        const velum = this.tract.velum;
+        const velumAngle = velum * 4;
         
         //first draw fill
         this.ctx!.beginPath();        
@@ -406,8 +406,8 @@ export class RPTTractUI {
 
     drawText(i: number, d: number, text: string) {
         if (!this.ctx) return;
-        let angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
-        let r = this.radius - this.scale*d; 
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
+        const r = this.radius - this.scale*d; 
         this.ctx!.save();
         this.ctx!.translate(this.originX-r*Math.cos(angle), this.originY-r*Math.sin(angle)+2); //+8);
         this.ctx!.rotate(angle-Math.PI/2);
@@ -417,31 +417,31 @@ export class RPTTractUI {
 
     moveTo(i: number, d: number) {
         if (!this.ctx) return;
-        let angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
         // let wobble = (Tract.maxAmplitude[Tract.n-1]+Tract.noseMaxAmplitude[Tract.noseLengths-1]);
         // wobble *= 0.03*Math.sin(2*i-50*time)*i/Tract.n;
         // angle += wobble;        
-        let wobble = 0; //remove this line to add wobble
-        let r = this.radius - this.scale*d + 100*wobble;
-        let x = this.originX-r*Math.cos(angle);
-        let y = this.originY-r*Math.sin(angle);
+        const wobble = 0; //remove this line to add wobble
+        const r = this.radius - this.scale*d + 100*wobble;
+        const x = this.originX-r*Math.cos(angle);
+        const y = this.originY-r*Math.sin(angle);
         this.ctx!.moveTo(x, y);
     }
     
     lineTo(i: number, d: number) {
         if (!this.ctx) return;
-        let angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);   
-        let wobble = 0; 
-        let r = this.radius - this.scale*d + 100*wobble;
-        let x = this.originX-r*Math.cos(angle);
-        let y = this.originY-r*Math.sin(angle);
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);   
+        const wobble = 0; 
+        const r = this.radius - this.scale*d + 100*wobble;
+        const x = this.originX-r*Math.cos(angle);
+        const y = this.originY-r*Math.sin(angle);
         this.ctx!.lineTo(x, y);
     }
 
     drawCircle(i: number, d: number, radius: number) {
         if (!this.ctx) return;
-        let angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
-        let r = this.radius - this.scale*d; 
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
+        const r = this.radius - this.scale*d; 
         this.ctx!.beginPath();
         this.ctx!.arc(this.originX-r*Math.cos(angle), this.originY-r*Math.sin(angle), radius, 0, 2*Math.PI);
         this.ctx!.fill();
@@ -490,9 +490,9 @@ export class RPTTractUI {
         this.ctx!.stroke();
         this.ctx!.fill();
         
-        let a = this.innerTongueControlRadius;
-        let c = this.outerTongueControlRadius;
-        let b = 0.5*(a+c);
+        const a = this.innerTongueControlRadius;
+        const c = this.outerTongueControlRadius;
+        const b = 0.5*(a+c);
         let r = 3;
         this.ctx!.fillStyle = "orchid";
         this.ctx!.globalAlpha = 0.3;        
@@ -509,11 +509,11 @@ export class RPTTractUI {
         this.ctx!.globalAlpha = 1.0;         
 
         //circle for tongue position
-        let angle = this.angleOffset + this.tongueIndexFromNormalized() 
+        const angle = this.angleOffset + this.tongueIndexFromNormalized() 
             * this.angleScale * Math.PI / (this.lipStart-1);
         r = this.radius - this.scale*(this.tongueDiameter);
-        let x = this.originX-r*Math.cos(angle);
-        let y = this.originY-r*Math.sin(angle);
+        const x = this.originX-r*Math.cos(angle);
+        const y = this.originY-r*Math.sin(angle);
         this.ctx!.lineWidth = 4;
         this.ctx!.strokeStyle = "orchid";
         this.ctx!.globalAlpha = 0.7;
@@ -679,8 +679,8 @@ export class RPTTractUI {
     {
         if (!this.ctx) return;
 
-        let angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
-        let r = this.radius - this.scale*d; 
+        const angle = this.angleOffset + i * this.angleScale * Math.PI / (this.lipStart-1);
+        const r = this.radius - this.scale*d; 
         this.ctx!.save();
         this.ctx!.translate(this.originX-r*Math.cos(angle), this.originY-r*Math.sin(angle)+2); //+8);
         this.ctx!.fillText(text, 0, 0);
@@ -696,8 +696,8 @@ export class RPTTractUI {
         this.ctx!.font="24px Arial";
         this.ctx!.textAlign = "center";
         this.ctx!.globalAlpha = 0.6;
-        let a = 2;
-        let b = 1.5;
+        const a = 2;
+        const b = 1.5;
 
         this.drawText(15/44 * n, a+b*0.60, 'æ'); //pat
         this.drawText(13/44 * n, a+b*0.27, 'ɑ'); //part
@@ -711,10 +711,10 @@ export class RPTTractUI {
         this.drawText(23/44 * n, a+b*0.1, '(u)'); //poot (rounded)   
         this.drawText(21/44 * n, a+b*0.6, 'ə'); //pert [should be ɜ]
         
-        let nasals = -1.1;
-        let stops = -0.4;
-        let fricatives = 0.5;
-        let approximants = 0.9;
+        const nasals = -1.1;
+        const stops = -0.4;
+        const fricatives = 0.5;
+        const approximants = 0.9;
         this.ctx!.globalAlpha = 0.8;
         
         //approximants
@@ -739,7 +739,7 @@ export class RPTTractUI {
     }
 
     getIndex(x: number, y: number) {
-        let xx = x-this.originX; let yy = y-this.originY;
+        const xx = x-this.originX; const yy = y-this.originY;
         let angle = Math.atan2(yy, xx);
         while (angle> 0) angle -= 2*Math.PI;
         return (Math.PI + angle - this.angleOffset)*(this.lipStart-1) / (this.angleScale*Math.PI);
@@ -747,7 +747,7 @@ export class RPTTractUI {
 
     getDiameter(x: number, y: number)
     {
-        let xx = x-this.originX; let yy = y-this.originY;
+        const xx = x-this.originX; const yy = y-this.originY;
         return (this.radius-Math.sqrt(xx*xx + yy*yy))/this.scale;
     }
 
@@ -756,7 +756,7 @@ export class RPTTractUI {
         const {width, height} = this.cnv!.getBoundingClientRect();
         const x = event.nativeEvent.offsetX/width *this.cnv!.width;
         const y = event.nativeEvent.offsetY/height*this.cnv!.height;
-        let touch: RPTTouch = {
+        const touch: RPTTouch = {
             x, y, alive: true,
             index: this.getIndex(x, y),
             diameter: this.getDiameter(x, y)
@@ -773,7 +773,7 @@ export class RPTTractUI {
     }
 
     endMouse = () => {
-        let touch = this.mouseTouch;
+        const touch = this.mouseTouch;
         if (!touch.alive) return;
         touch.alive = false;
         this.handleTouches();
@@ -782,7 +782,7 @@ export class RPTTractUI {
     moveMouse = (event: React.MouseEvent) => {
         event.preventDefault();
         const {width, height} = this.cnv!.getBoundingClientRect();
-        let touch = this.mouseTouch;
+        const touch = this.mouseTouch;
         if (!touch.alive) return;
         touch.x = event.nativeEvent.offsetX/width *this.cnv!.width,
         touch.y = event.nativeEvent.offsetY/height*this.cnv!.height
@@ -808,13 +808,13 @@ export class RPTTractUI {
         }
 
         if (this.tongueTouch) {
-            let {index, diameter} = this.tongueTouch;      
+            const {index, diameter} = this.tongueTouch;      
             let fromPoint = (this.outerTongueControlRadius-diameter)/(this.outerTongueControlRadius-this.innerTongueControlRadius);
             fromPoint = constrain(fromPoint, 0, 1);
             fromPoint = Math.pow(fromPoint, 0.58) - 0.2*(fromPoint*fromPoint-fromPoint); //horrible kludge to fit curve to straight line
-            let tongueDiameter = constrain(diameter, this.innerTongueControlRadius, this.outerTongueControlRadius);
+            const tongueDiameter = constrain(diameter, this.innerTongueControlRadius, this.outerTongueControlRadius);
             let tongueIndex = constrain(index, this.tongueLowerIndexBound, this.tongueUpperIndexBound);
-            let out = fromPoint*0.5*(this.tongueUpperIndexBound-this.tongueLowerIndexBound);
+            const out = fromPoint*0.5*(this.tongueUpperIndexBound-this.tongueLowerIndexBound);
             tongueIndex = constrain(index, this.tongueIndexCentre-out, this.tongueIndexCentre+out);
             this.tract.tongueIndex.value = this.normalizedTongueIndex(tongueIndex);
             this.tract.tongueDiameter.value = tongueDiameter;
@@ -824,7 +824,7 @@ export class RPTTractUI {
         this.tract.velumTarget.value = 0.01
         let index, diameter;
         for (let j=0; j<this.touchesWithMouse.length; j++) {
-            let touch = this.touchesWithMouse[j];
+            const touch = this.touchesWithMouse[j];
             if (!touch.alive) continue;  
             index = touch.index;
             diameter = touch.diameter;
@@ -843,4 +843,4 @@ export class RPTTractUI {
 
 export function constrain(n: number, low: number, high: number): number {
     return Math.max(Math.min(n, high), low);
-};
+}
