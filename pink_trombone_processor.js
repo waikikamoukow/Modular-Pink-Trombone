@@ -1,56 +1,50 @@
 /*
-    Modular Pink Trombone
-    By Yonatan Rozin
+  Modular Pink Trombone
+  By Yonatan Rozin
+  Based on Pink Trombone by Neil Thapen. (see "Pink Trombone.html")
 
-    A modular version of Pink Trombone that allows for faster audio processing
-    and multiple simultaneous voices.
+  A modular version of Pink Trombone that allows for faster audio processing
+  and multiple simultaneous voices.
 
-    Modifications from original:
-    -   Deprecated ScriptProcessorNode has been replaced with new AudioWorkletNode
-            - This allows the audio processing to run in a separate thread from
-            the main script, making it MUCH faster and non-blocking
-    -   Pink Trombone objects (Tract, Glottis) integrated as AudioWorkletProcessor
-        class objects, allowing for multiple simultaneous Pink Trombone voices
-            - The original noise module has been made into a class, allowing for
-            each voice to have its own noise modules, with a unique noise seed.
-            This allows noisy signals (ex. vibrato) to be different per voice
-            This de-syncing can be reversed by setting the noise seeds to the same
-            number (this.noise.seed(0)) in VocalWorkletProcessor constructor
-    -   UI has been removed, it may possibly be re-integrated later.
-    -   Tract.addTurbulenceNoise() has been modified (since UI has been removed)
-        to allow fricatives to still be produced:
-            - Instead of relying on UI touches, addTurbulence noise simulates "touch"
-            using the value and location of the smallest current diameter, aka the
-            point of highest constriction in the vocal tract. These values are updated
-            constantly in Tract.reshapeTract(). A new fIntensity
-            variable has been added to the Tract object that determines the volume
-            of fricative noise. This allows letters that differ only by fricative
-            volume (for example, T and N) to remain distinguishable from one another
+  Modifications from original:
+  - Deprecated ScriptProcessorNode has been replaced with new AudioWorkletNode
+    - This allows the audio processing to run in a separate thread from
+      the main script, making it MUCH faster and non-blocking
+  - Pink Trombone objects (Tract, Glottis) integrated as AudioWorkletProcessor
+    class objects, allowing for multiple simultaneous Pink Trombone voices
+  - The original noise module has been made into a class, allowing for
+    each voice to have its own noise modules, with a unique noise seed.
+    This allows noisy signals (ex. vibrato) to be different per voice
+    This de-syncing can be reversed by setting the noise seeds to the same
+    number (this.noise.seed(0)) in VocalWorkletProcessor constructor
+  - Parameterization of UI controls - tongue index/diameter, constriction index/diameter, velum target
+    - tongue i/d replaces "tongue control" UI area
+    - constriction index/diameter simulates mouse click inside oral cavity
 
-    Built using Pink Trombone
-    version 1.1, March 2017
-    by Neil Thapen
-    venuspatrol.nfshost.com
+  Built using Pink Trombone
+  version 1.1, March 2017
+  by Neil Thapen
+  venuspatrol.nfshost.com
 
-    Copyright 2017 Neil Thapen
+  Copyright 2017 Neil Thapen
 
-    Permission is hereby granted, free of charge, to any person obtaining a
-    copy of this software and associated documentation files (the "Software"),
-    to deal in the Software without restriction, including without limitation
-    the rights to use, copy, modify, merge, publish, distribute, sublicense,
-    and / or sell copies of the Software, and to permit persons to whom the
-    Software is furnished to do so, subject to the following conditions:
+  Permission is hereby granted, free of charge, to any person obtaining a
+  copy of this software and associated documentation files (the "Software"),
+  to deal in the Software without restriction, including without limitation
+  the rights to use, copy, modify, merge, publish, distribute, sublicense,
+  and / or sell copies of the Software, and to permit persons to whom the
+  Software is furnished to do so, subject to the following conditions:
 
-    The above copyright notice and this permission notice shall be included in
-    all copies or substantial portions of the Software.
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
 
-    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
-    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-    FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
-    IN THE SOFTWARE.
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+  FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+  IN THE SOFTWARE.
 */
 import Noise from "./noise.js";
 
@@ -74,6 +68,15 @@ class GlottisProcessor extends AudioWorkletProcessor {
         defaultValue: 140,
         minValue: 20,
         maxValue: 2000,
+        automationRate: "k-rate"
+      },
+      //aspiration: volume of unpitched aspect of the glottal source.
+      //  This does NOT affect fricatives! See TractProcessor.parameters.fricatives for fricative volume
+      {
+        name: "aspiration",
+        defaultValue: 1,
+        minValue: 0,
+        maxValue: 1,
         automationRate: "k-rate"
       },
       //intensity: volume of voiced (pitched) aspect of the voice. Does not affect fricatives and transients.
@@ -135,9 +138,10 @@ class GlottisProcessor extends AudioWorkletProcessor {
   vibratoAmount = 0.005;
   vibratoFrequency = 6;
   intensity = 0;
-  loudness = 1;
-
+  aspiration = 1;
+  
   //these parameters are modified by internal methods of the object
+  loudness = 1;
   totalTime = 0;
   timeInWaveform = 0;
   waveformLength = 0;
@@ -152,7 +156,7 @@ class GlottisProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
     this.init();
-    this.i = options.processorOptions.i;
+    this.name = options.processorOptions.name;
   }
 
   init() {
@@ -233,10 +237,9 @@ class GlottisProcessor extends AudioWorkletProcessor {
     }
     let out = this.normalizedLFWaveform(this.timeInWaveform/this.waveformLength);
     //MODIFIED: multiply aspiration by 3 to match original volume (why do we have to do this?)
-    let aspiration = this.intensity * (1 - Math.sqrt(this.UITenseness)) * this.getNoiseModulator() * noiseSource * 8;
+    let aspiration = this.intensity * (1 - Math.sqrt(this.UITenseness)) * this.getNoiseModulator() * noiseSource * this.aspiration * 8;
     aspiration *= 0.2 + 0.02 * this.noise.simplex1(this.totalTime * 1.99);
-    out += aspiration;
-    return out;
+    return [out, aspiration];
   }
 
   getNoiseModulator() {
@@ -250,15 +253,16 @@ class GlottisProcessor extends AudioWorkletProcessor {
     vibrato += 0.02 * this.noise.simplex1(this.totalTime * 4.07);
     // vibrato += 0.04 * this.noise.simplex1(this.totalTime * 2.15);
 
-    if (this.UIFrequency > this.smoothFrequency) 
-      this.smoothFrequency = Math.min(this.smoothFrequency * 1.1, this.UIFrequency);
-    if (this.UIFrequency < this.smoothFrequency) 
-      this.smoothFrequency = Math.max(this.smoothFrequency / 1.1, this.UIFrequency);
+    this.smoothFrequency = this.UIFrequency;
+    // if (this.UIFrequency > this.smoothFrequency) 
+    //   this.smoothFrequency = Math.min(this.smoothFrequency * 1.1, this.UIFrequency);
+    // if (this.UIFrequency < this.smoothFrequency) 
+    //   this.smoothFrequency = Math.max(this.smoothFrequency / 1.1, this.UIFrequency);
     this.oldFrequency = this.newFrequency;
     this.newFrequency = this.smoothFrequency * (1+vibrato);
     this.oldTenseness = this.newTenseness;
     this.newTenseness = this.UITenseness
-      + 0.1 * this.noise.simplex1(this.totalTime * 0.46) + 0.05 * this.noise.simplex1(this.totalTime * 0.36);
+    //   + 0.1 * this.noise.simplex1(this.totalTime * 0.46) + 0.05 * this.noise.simplex1(this.totalTime * 0.36);
   }
 
   // based on code from pink trombone AudioContext.doScriptProcessor()
@@ -269,15 +273,17 @@ class GlottisProcessor extends AudioWorkletProcessor {
     //update k-rate parameter values for the current block
     this.vibratoAmount = params["vibrato-amount"][0];
     this.vibratoFrequency = params["vibrato-frequency"][0];
+    this.aspiration = params["aspiration"][0];
     
     //some voices dont't have inputs defined immediately (why?)
     if (!inputs[0][0]) return true; //output nothing (silence) until they're ready
     
     try {
       let inputArray = inputs[0][0];
-      let outArray = outputs[0][0];
 
-      let noiseModArray = outputs[1][0];
+      let outArray = outputs[0][0];
+      let aspirationArray = outputs[1][0];
+      let noiseModArray = outputs[2][0];
       
       //code taken from AudioSystem.doScriptProcessor
       for (let j = 0, N = outArray.length; j < N; j++) {
@@ -290,15 +296,14 @@ class GlottisProcessor extends AudioWorkletProcessor {
         
         this.intensity = params["intensity"][j] || params["intensity"][0];
 
-        //get final pitch by applying
         this.UIFrequency = params["frequency"][0] * 
           Math.pow(2, (params['pitchbend'][j] || params['pitchbend'][0])/12);
 
         let lambda1 = j / N;
-        let samp = this.runStep(lambda1, inputArray[j]);
+        let [glottalSource, aspiration] = this.runStep(lambda1, inputArray[j]);
 
-        //apply panning multiplers to L and R channels
-        outArray[j] = samp;
+        outArray[j] = glottalSource;
+        aspirationArray[j] = aspiration;
         noiseModArray[j] = this.getNoiseModulator();
       }
       this.finishBlock();
@@ -311,6 +316,7 @@ class GlottisProcessor extends AudioWorkletProcessor {
   }
 }
 
+//TODO: NORMALIZE TONGUE INDEX TOO (0-1)
 class TractProcessor extends AudioWorkletProcessor {
   static get parameterDescriptors() {
     return [
@@ -335,29 +341,14 @@ class TractProcessor extends AudioWorkletProcessor {
         name: "constriction-index",
         defaultValue: 0,
         minValue: 0,
-        // maxValue: 44,
+        maxValue: 1,
         automationRate: "a-rate"
       },
       //vertical location of constriction, used to simulate a mouse held on the UI
       {
         name: "constriction-diameter",
         defaultValue: 3,
-        maxValue: 5,
-        automationRate: "a-rate"
-      },
-
-      //index/diameter of a second tongue constriction
-      {
-        name: "constriction2-index",
-        defaultValue: 0,
-        minValue: 0,
-        // maxValue: 44,
-        automationRate: "a-rate"
-      },
-      {
-        name: "constriction2-diameter",
-        defaultValue: 3,
-        maxValue: 5,
+        maxValue: 3.5,
         automationRate: "a-rate"
       },
 
@@ -375,18 +366,23 @@ class TractProcessor extends AudioWorkletProcessor {
       },
       //volume of fricative white noise produced by tight constrictions.
       {
-        name: "fricative-strength",
+        name: "fricatives",
         defaultValue: 1,
         minValue: 0,
-        maxValue: 1,
         automationRate: "a-rate"
       },
+      {
+        name: "transients",
+        defaultValue: 1,
+        minValue: 0,
+        automationRate: "k-rate"
+      },  
       //tongue index + diameter - simulated horizontal + vertical position of tongue in GUI
       {
         name: "tongue-index",
-        defaultValue: 12.9,
+        defaultValue: .5,
         minValue: 0,
-        maxValue: 44,
+        maxValue: 1,
         automationRate: "k-rate" 
       },    
       {
@@ -419,7 +415,7 @@ class TractProcessor extends AudioWorkletProcessor {
   fade = 1.0; //0.9999
   movementSpeed = 15; //cm per second
   transients = [];
-  transientStrength = 0.3;
+  transientStrength = 1;
   lipOutput = 0;
   noseOutput = 0;
   velumTarget = 0.01;
@@ -431,8 +427,6 @@ class TractProcessor extends AudioWorkletProcessor {
 
   constrictionIndex = 0;
   constrictionDiameter = 3;
-  constriction2Index = 0;
-  constriction2Diameter = 3;
 
   tongueIndex = 12.9;
   tongueDiameter = 2.43;
@@ -441,10 +435,10 @@ class TractProcessor extends AudioWorkletProcessor {
 
   constructor(options) {
     super();
-
-    this.i = options.processorOptions.i;
-
+    this.name = options.processorOptions.name;
     this.init();
+    this.port.postMessage({d: this.diameter, v: this.noseDiameter[0]});    
+    this.port.addEventListener("message", msg => {this.diameter = msg.d, this.targetDiameter = msg.td});
   }
 
   init(n = 44) {
@@ -452,13 +446,24 @@ class TractProcessor extends AudioWorkletProcessor {
     this.n = n;
     this.bladeStart = Math.floor(10 * this.n/44);
     this.tipStart = Math.floor(32 * this.n/44);
-    this.lipStart = Math.floor(39 *this.n/44);    
+    this.lipStart = Math.floor(39 *this.n/44);   
+    
+    this.tongueLowerIndexBound = this.bladeStart + 2; 
+    this.tongueUpperIndexBound = this.tipStart - 3;   
 
     this.diameter = new Float64Array(this.n);
     this.targetDiameter = new Float64Array(this.n);
 
-    this.getTargetDiameters();
-    for (let i = 0; i < this.targetDiameter.length; i++) this.diameter[i] = this.targetDiameter[i];
+    this.setTargetDiameters();
+    for (let i = 0; i < this.targetDiameter.length; i++) this.diameter[i] = this.targetDiameter[i]
+
+    // for (let i = 0; i < this.n; i++) {
+    //     let diameter = 0;
+    //     if (i < 7 * this.n / 44-0.5) diameter = 0.6;
+    //     else if (i < 12 * this.n / 44) diameter = 1.1;
+    //     else diameter = 1.5;
+    //     this.diameter[i] = this.targetDiameter[i] = this.diameter[i] || diameter;
+    // }
     
     this.R = new Float64Array(this.n);
     this.L = new Float64Array(this.n);
@@ -490,8 +495,6 @@ class TractProcessor extends AudioWorkletProcessor {
     this.calculateReflections();        
     this.calculateNoseReflections();
     this.noseDiameter[0] = this.velumTarget;
-
-    this.port.postMessage({d: this.diameter, v: this.noseDiameter[0]});
   }
 
   calculateReflections()
@@ -534,14 +537,14 @@ class TractProcessor extends AudioWorkletProcessor {
     for (let i = 0; i < this.n; i++) {
       let diameter = this.diameter[i];
       let targetDiameter = this.targetDiameter[i];
-      if (diameter <= 0) newLastObstruction = i;
+      if (diameter <= 0.05) newLastObstruction = i;
       let slowReturn; 
       if (i < this.noseStart) slowReturn = 0.6;
       else if (i >= this.tipStart) slowReturn = 1.0; 
       else slowReturn = 0.6 + 0.4 * (i - this.noseStart) / (this.tipStart - this.noseStart);
       this.diameter[i] = moveTowards(diameter, targetDiameter, slowReturn * amount, 2 * amount);
     }
-    if (this.lastObstruction > -1 && newLastObstruction == -1 && this.noseA[0] < 0.05 && this.fricative_strength) {
+    if (this.lastObstruction > -1 && newLastObstruction == -1 && this.noseA[0] < 0.05) { //&& this.fricativeStrength (???)
       this.addTransient(this.lastObstruction);
     }
     this.lastObstruction = newLastObstruction;
@@ -555,7 +558,7 @@ class TractProcessor extends AudioWorkletProcessor {
     trans.position = position;
     trans.timeAlive = 0;
     trans.lifeTime = 0.2;
-    trans.strength = this.transientStrength;
+    trans.strength = 0.3 * this.transientStrength;
     trans.exponent = 200; 
     this.transients.push(trans);
   }
@@ -585,7 +588,6 @@ class TractProcessor extends AudioWorkletProcessor {
 
     let intensity = this.fricative_strength * 2;
     this.addTurbulenceNoiseAtIndex(0.66 * turbulenceNoise * intensity, this.constrictionIndex, this.constrictionDiameter, noiseModulator);
-    this.addTurbulenceNoiseAtIndex(0.66 * turbulenceNoise * intensity, this.constriction2Index, this.constriction2Diameter, noiseModulator);
   }
 
   addTurbulenceNoiseAtIndex(turbulenceNoise, index, diameter, noiseModulator) {   
@@ -663,7 +665,7 @@ class TractProcessor extends AudioWorkletProcessor {
     this.calculateReflections();
   }
 
-  getTargetDiameters() {
+  setTargetDiameters() {
 
     try {
 
@@ -716,36 +718,6 @@ class TractProcessor extends AudioWorkletProcessor {
 
       }
 
-      //inscribe tongue constriction
-      let index2 = this.constriction2Index;
-      let dia2 = this.constriction2Diameter;
-
-      if (index2 && (dia2 > -1.6)) {
-      
-        if (index2 > this.noseStart && dia2 < -0.8) this.velumTarget = 0.4;
-        dia2 -= 0.3;
-        if (dia2 < 0) dia2 = 0;     
-        
-        let width2 = map(index2, 25/44*this.n, this.tipStart, 10, 5)/44*this.n;
-
-        if (index2 >= 2 && index2 < this.n && dia2 < 3) {
-
-          let intIndex = Math.round(index2);
-          for (let i=-Math.ceil(width2)-1; i<width2+1; i++) {   
-            if (intIndex+i<0 || intIndex+i >= this.n) continue;
-            let relpos = (intIndex+i) - index2;
-            relpos = Math.abs(relpos)-0.5;
-            let shrink;
-            if (relpos <= 0) shrink = 0;
-            else if (relpos > width2) shrink = 1;
-            else shrink = 0.5 * (1-Math.cos(Math.PI * relpos / width2));
-            if (dia2 < this.targetDiameter[intIndex+i]) {
-              this.targetDiameter[intIndex+i] = dia2 + (this.targetDiameter[intIndex+i]-dia2)*shrink;
-            }
-          }
-        }
-      }
-
       //inscribe lip constriction
       let lIndex = this.n - 2;
       let lDia = this.lipDiameter;
@@ -770,71 +742,57 @@ class TractProcessor extends AudioWorkletProcessor {
         
   process(inputs, outputs, params) {
 
-
-    //some voices dont't have inputs defined immediately (why?)
-    if (!inputs[0][0]) return true; //output nothing (silence) until they're ready
-
+    //inputs: glottal source, aspiration, fricative noise source, noiseModulator
 
     let glottalSignal = inputs[0][0];
-    let fricativeNoise = inputs[1][0];
-    let noiseModArray = inputs[2][0];
+    let aspiration = inputs[1][0];
+    let fricativeNoise = inputs[2][0];
+    let noiseModulator = inputs[3][0];
+
+    let outArray = outputs[0][0];
+
+    //handle undefined input array (for some reason)
+    if ([glottalSignal, aspiration, fricativeNoise, noiseModulator].includes(undefined)) return true;
     
     try {
 
       const newN = Math.floor(params['n'][0]);
-      if (newN != this.n) {
-        this.init(newN);
-        console.log(`Voice #${this.i} new N: ${this.n}`);
-      }
+      if (newN != this.n) this.init(newN);
       
       //update a bunch of object properties using audioparam values
       this.velumTarget = params["velum-target"][0];
 
-      this.constrictionIndex = params["constriction-index"][0];
+      this.constrictionIndex = params["constriction-index"][0] * this.n;
       this.constrictionDiameter = params["constriction-diameter"][0] + 0.3;
-      this.constriction2Index = params["constriction2-index"][0];
-      this.constriction2Diameter = params["constriction2-diameter"][0] + 0.3;
 
-      this.tongueIndex = params["tongue-index"][0]
+      this.tongueIndex = params["tongue-index"][0] * (this.tongueUpperIndexBound - this.tongueLowerIndexBound)
+        + this.tongueLowerIndexBound;
       this.tongueDiameter = params["tongue-diameter"][0];
 
       this.lipDiameter = params["lip-diameter"][0];
 
-      this.getTargetDiameters();
+      this.setTargetDiameters();
 
       this.movementSpeed = params["movement-speed"][0];
-      this.fricative_strength = params["fricative-strength"][0];
-
-      var outArrayL = outputs[0][0];
-      var outArrayR = outputs[0][1];
+      this.fricative_strength = params["fricatives"][0];
+      this.transientStrength = params["transients"][0];
       
-      // var panMultR = (1 + params["pan"][0]) / 2;
-      // var panMultL = 1 - panMultR;
-      
-      // var panMax = Math.max(panMultL, panMultR);
-      // panMultR /= panMax;
-      // panMultL /= panMax;
-      
-      for (let j = 0, N = outArrayL.length; j < N; j++) {
+      for (let j = 0, N = outArray.length; j < N; j++) {
         
         let lambda1 = j / N;
         let lambda2 = (j + 0.5) / N;
-        let glottalOutput = glottalSignal[j]
+        let glottalOutput = aspiration[j] + glottalSignal[j];
         
         let vocalOutput = 0;
-        this.runStep(glottalOutput, fricativeNoise[j], lambda1, noiseModArray[j]);
+        this.runStep(glottalOutput, fricativeNoise[j], lambda1, noiseModulator[j]);
         vocalOutput += this.lipOutput + this.noseOutput;
         
-        this.runStep(glottalOutput, fricativeNoise[j], lambda2, noiseModArray[j]);
+        this.runStep(glottalOutput, fricativeNoise[j], lambda2, noiseModulator[j]);
         vocalOutput += this.lipOutput + this.noseOutput;
 
         let samp = vocalOutput * 0.125;
         
-        outArrayL[j] = samp 
-          // * panMultL;
-        outArrayR[j] = samp 
-          // * panMultR;
-
+        outArray[j] = samp;
       }
       
       this.finishBlock();
@@ -843,7 +801,7 @@ class TractProcessor extends AudioWorkletProcessor {
       this.port.postMessage({d: this.diameter, v: this.noseDiameter[0]});
       
     } catch (e) {
-      console.error(`error from voice tract #${this.i}:`, e);
+      console.error(`error from voice tract #${this.name}:`, e);
       return false;
     }
     return true;

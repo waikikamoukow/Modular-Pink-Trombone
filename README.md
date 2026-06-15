@@ -1,64 +1,69 @@
-# Modular Pink Trombone
-A modular, audio-only version of Pink Trombone optimized for use in live performance. Features significantly faster and non-blocking audio processing and the ability to produce multiple simultaneous voices.
-
-## Notice
-This patch is based heavily and exclusively on the original [Pink Trombone](https://dood.al/pinktrombone/), created by Neil Thapen and released under the [MIT License](https://opensource.org/license/mit). As per the license requests, a copy of the original code and license are included in this repository.
-
-__This code is functional on Chrome and Firefox. Other browsers have not yet been tested.__
-
-## Modifications from original
-- The deprecated ScriptProcessorNode used in the original Pink Trombone has been replaced with new Web Audio API AudioWorkletNodes. This allows the audio processing to run in dedicated threads, preventing the it from interfering with the rest of the script, or vice versa.
-  - The Pink Trombone variables Tract and Glottis have been reimplemented as new Web AudioWorkletProcessor classes ```GlottisProcessor``` and ```TractProcessor```. This allows multiple voice objects, each with its own processors, to run simultaneously. You can create an entire Pink Trombone chorus (maximum voice count depends on CPU capabilities)!
+# React Pink Trombone
+A modular, polyphonic refactorization of [Pink Trombone](https://dood.al/pinktrombone/) and an interactive ```<Tract>``` UI component for use in React apps.
 
 ## Installation
-- ```git clone``` this repo into your project folder
-
-## Voice Setup
-- In your script, create a ```new AudioContext()``` or use an existing one (if integrating into an existing project)
-- ```<audioCtx>.audioWorklet.addModule(<path/to/src/pink_trombone_processor.js>)```
-  - The specific URL to use inside addModule() may be tricky to figure out. The path may have to be relative to your project's html file, NOT necessarily relative to the script.
-  - addModule is an async function. Use ```.then()``` or ```await``` to create your voices after the modules are loaded.
-- Create ```new MPT_Voice()```s. The number of active voices at a time depends on your CPU. If the limit is exceeded, audible "pops" in the sound will begin to occur.
-  - Voices must be created AFTER the audio modules are loaded! Since addModule is an async function, wait until the promise is resolved to create your voice(s).
-  - Pass in a name (any), a reference to your AudioContext and an optional reference to an HTML canvas element.
-    - If you pass an HTMLCanvas, an interactive GUI will be rendered to that canvas which you can use to control the voice. If no canvas is specified, the voice will be "headless" (no GUI, but can still produce sound and be manipulated with audioParams)
-      - You may add a headless voice to the DOM later using ```<HTMLElement>.appendChild(<voice>.UI.cnv)```
-- Connect your voice(s) using ```<voice>.connect(destinationNode)```. The destination can be another AudioNode for further audio processing, or the AudioContext.destination.
-  - Use ```<voice>.disconnect()``` to disconnect a voice from the audio network.
+- ```git clone``` this repo into a desired location in your project directory, likely somewhere within ```src```. The project should have React installed with TypeScript already.
 
 ## Usage
-Controlling the voice is done through a series of AudioParams on the voice's Glottis and Tract AudioWorklets and GainNode. These internal nodes are all Web Audio AudioNodes. Their AudioParams can be written to directly by setting their ```.value``` property, or can be adjusted smoothly using AudioParam methods such as ```setTargetAtTime```, etc.
 
-Most (but not all) glottis processor AudioParams are timbral properties which affect the overall quality of the voice, such as frequency, tenseness and vibrato. These should be set beforehand. On the other hand, most (but not all) tract processor AudioParams are parameters modeled after a physical mouth, such as tongue and lip position. These get manipulated in real-time to produce speech.
+### Adding AudioWorklet Modules
+- Create a ```new AudioContext()``` or use an existing one. You may want to store it in a component state.
+- Once the AudioContext is created, you must load the AudioWorklet modules, defined inside ```pink_trombone_processor.js```. You can do this inside a ```useEffect``` with the AudioContext state as a dependency.
+  - If you cloned your repo into ```src```: ```await <yourAudioContext>.audioWorklet.addModule(new URL('path/to/pink_trombone_processor.js', import.meta.url));```
+    - The above example is for projects using Vite. It may have to be changed for other React frameworks.
+  - Finding the correct URL for adding AudioWorklet modules is often tricky. If the above doesn't work, you may move ```pink_trombone_processor.js``` and ```noise.js``` into your public folder and use ```await <yourAudioContext>.audioWorklet.addModule('path/to/pink_trombone_processor.js>);``` instead. __The path should be relative to the public directory!__
+  - If the above doesn't work either, you may try ```import WorkletProcessor from "path/to/pink_trombone_processor.js?worklet&url``` and then ```await <audioCtx>.audioWorklet.addModule(WorkletProcessor)```
+    
+### RPT Voice(s)
+The ```RPT_Voice``` class manages a single modular Pink Trombone voice, with methods for changing audio parameters and manipulating speech.
 
-### Gain
-- Access the voice's gain AudioParam with ```<voice>.gainNode.gain```
-- Or use ```<voice>.setGain(gainValue)``` to set the value directly
+#### Initialization
+- Create a ```new RPT_Voice(<name/number>, <yourAudioContext>, <audioDestination?>)```, or several. You may want to store it in a component state.
+  - ```name/number``` can be any string or number. The value doesn't matter, but it's used in error messages to identify the specific voice. It's therefore recommended to use a unique value for each voice.
+  - ```audioDestination``` is an optional ```AudioNode``` which the voice AudioWorklet will route its audio output to. If not specified, it will default to the AudioContext destination (the audio output device).
+  - Once a voice is created, enable audio processing with ```<voice>.connect()``` whe needed. When a voice is no longer needed, call ```<voice>.disconnect()``` to free up resources.
+ 
+#### Glottis AudioParams
+The Glottis module produces a raw "glottal source" - the sound produced by the vocal cords before being filtered by the vocal tract. Access Glottis parameters of a voice using ```<voice>.glottis.parameters.get(<param>)``` and use any AudioParam methods such as ```setTargetAtTime```, or write values to ```<AudioParam>.value``` directly.
+- Timbral AudioParams - general timbral properties of the voice not used for speech generation:
+  - ```frequency``` (float, in Hz) - the fundamental frequency of the voice
+  - ```tenseness``` (float 0-1) - between 0, a breathy whisper; and 1, a harsh, strained tone. Default and "natural" voice is around 0.6.
+  - ```intensity``` (float 0-1) - the volume of the pitched component of the voice. Generally stays at 1, but should drop to 0 for unpitched consonants such as S or F. 
+    - Don't treat this as a voice gain value! Use ```<voice>.setGain``` to set the gain on the entire voice.
+  - ```aspiration``` (float 0-1) - scales the volume of the unpitched "breath" component of the glottal source. 
+    - The volume of the unpitched component scales inversely with tenseness and is then multiplied by this value. Will usually stay at the default 1 for the original effect. Decrease this value when using EQs that attenuate higher frequencies to keep the breathy quality from being too prominent.
+    - This does NOT affect fricatives! See Tract parameter "fricatives"
+  - ```vibrato-frequency``` (in Hz) - the frequency of a sine wave that modulates the voice frequency to create a vibrato effect.
+  - ```vibrato-amount``` (unit??) - the amplitude of the vibrato sine wave. Units unknown, but the number should be very small. A typical vibrato amount is around 0.025. Anything above 0.4 will start to sound ridiculous. The effect is not very realistic.
+- Speech AudioParams - manipulated over time to create speech:
+  - ```tenseness-mult``` (float 0-1) - a multiplier of the tenseness parameter, used to scale the final tenseness between 0 and the base tenseness value.
+  - ```pitchbend``` (in semitones, not necessary for speech) - bends the fundamental frequency up/down the specified # of semitones.
 
-### Glottis AudioParams
-Access using ```<voice>.glottis.parameters.get(<paramName>)```. These are all timbral properties that should be set in advance, except for tenseness-mult and pitchbend, which are adjusted during speech production.
-- ```frequency``` (in Hz) - sets the fundamental frequency of the voice
-  - Can also be set using ```<voice>.setFrequency(<freq>)```
-- ```intensity``` (0-1) - the volume of the pitched component of the voice
-- ```tenseness``` (0-1) - a timbral quality ranging from an unpitched whisper (0) to a harsh, strained tone (1)
-- ```tenseness-mult``` (0-1) - scales the final tenseness value from 0-tenseness. Manipulated during speech production.
-- ```vibrato-amount``` (unit??) - sets the amploitude of vibrato, an LFO that modulates the fundamental frequency of the voice. Should be a really small number (0.005 default, anything >0.05 will start to sound ridiculous)
-- ```vibrato-frequency``` (in Hz) - sets the frequency of vibrato
-- ```pitchbend``` (in half-steps) - bends the fundamental frequency of the voice up/down the specified number of half steps. Recommended to use ```setTargetAtTime``` for the smoothest effect.
+#### Tract AudioParams
+The Tract module filters the glottal source output by the Glottis using several parameters modeled after the human vocal tract. Access Tract parameters of a voice using ```<voice>.tract.parameters.get(<param>)``` and use any AudioParam methods, or write to ```<AudioParam>.value``` directly.
+- Timbral AudioParams - general properties of the vocal tract, not used during speech generation:
+  - ```n``` (int) - the length of the vocal tract, in segments. Default "male" length is 44. Shortening the tract will produce gradually "younger", more "feminine" voices.
+    - If using a corresponding Tract UI component, use ```<voice>.setN(<n>)``` instead of writing the parameter value directly to update the UI visuals as well.
+- Speech AudioParams - manipulated over time to create speech:
+  - ```tongue-index``` + ```tongue-diameter``` - the index + diameter of the tongue position, relevant for vowel production. In the GUI, these are manipulated by dragging the pink circle around the "tongue control" area.
+  - Tongue index is from 0 - 1, representing the left- and right-most sides of the tongue control area. Tongue diameter is always between 2.05 and 3.5, where higher numbers are LOWER in the tongue control area.
+  - ```constriction-index``` + ```constriction-diameter``` - the index + diameter of the tongue constriction, relevant for producing most consonants. In the GUI, these are manipulated by clicking/dragging around the "oral cavity" area.
+    - Constriction index is between 0 and 1, representing the length of the oral tract, where 0 is at the throat and 1 is at the opening of the mouth.
+  - ```lip-diameter``` - the diameter of the opening of the lips, used for producing O and U vowels. Represents the same vertical position as constriction diameter.
+  - ```velum-target``` (float 0.01 - 0.4, in cm?) - the width of the velum, which connects the oral and nasal tracts. Closed by default but opens for nasal consonants such as N, M and NG.
+  - ```fricatives``` (float 0+) - the volume of fricatives, white noise produced by tight tongue constrictions for consonants such as S and V. Default volume is 1.
+  - ```transients``` (float 0-1) - the volume of transients, short clicks produced by the tongue when leaving the roof of the mouth.
+    - Default volume is 1, which is sometimes a bit loud for some consonants.
+  - ```movement-speed``` (float 0+ in cm/s?, not required for speech) - the speed with which the tract measurements smoothly approach their target values. Default is 15. Set to a negative number for instant or 0 to freeze the tract at its current shape.
 
-### Tract AudioParams
-Access using ```<voice>.tract.parameters.get(<paramName>)```. These are all properties that are adjusted in real-time to produce speech, except for n, which is a timbral property that should be set in advance.
-- ```n``` (int) - sets the length of the tract, in segments. Default is 44, smaller values produce "younger", more "feminine" voices but anything below 38 will start to sound alien
-  - __Set this using ```<voice>.setN(<n>)```! if using a GUI__ instead of writing to AudioParam value directly!
-- Tongue audioParams - set the position of the base of the tongue. These are used to produce various vowel sounds (A, E, I, etc.)
-  - ```tongue-index``` (float) - the horizontal position (as a segment #) of the base of the tongue. Moves the tongue forwards and backwards in the "mouth" (left/right in the GUI)
-    - For a tract of default length 44, the tongue index stays between 12 and 29. Scale these numbers down in shorter tracts
-  - ```tongue-diameter``` (2.05-3.5) - the vertical position of the tongue. Range stays the same regardless of tract size.
-- ```lip-diameter``` (0-1.5) - sets the width of the opening of the mouth, used to produce vowels such as O and U. At 0, the mouth is closed.
-- Constriction audioParams - set the position of the tip of the tongue, which constricts the flow of air at different points to produce consonants
-  - ```constriction-index``` (float 0-n) - the horizontal position (as a segment #) of the tip of the tongue. Moves the tongue forward and backwards in the "mouth" (left/right in the GUI)
-  - ```constriction-diameter``` (float 0-5) - the vertical position of the tip of the tongue. 
-    - At 0, the tongue is touching the roof of the mouth, which will block air flow entirely and cause silence
-    - At values >0 and <0.3, the narrow constriction causes air turbulence, producing white noise characteristic of vowels such as S and F
-- ```velum-target``` (0.01-0.4) - sets the width of the velum, a narrow passageway between the oral and nasal tracts. Closed (0.01) by default but is opened during the production of consonants where the oral tract is closed, such as M, N or NG
-- ```movement-speed``` - the speed at which the tongue/constriction/lips positions move towards their target values. 15 by default but can be reduced to produce sloowwweerrrrr sspeeeechhh
+#### Gain + Pan
+These are applied to the entire voice after being filtered by the vocal tract.
+  - ```<voice>.setGain(gain)``` - sets the gain (volume) of the voice (0 for silent, 1 for default, 1+ to amplify)
+  - ```<voice>.setPanning(pan)``` - sets the stereo panning of the voice (-1 for L -> 1 for R, default 0 for center)
+
+### Tract UI Component
+The ```<Tract>``` component renders a single interactive tract UI that looks and behaves almost identically to the one found in the original Pink Trombone.
+- Add a ```<Tract voice={<RPT_Voice>} <reportVowel?> <style?>/>``` component anywhere in your component tree. Props:
+  - voice: the ```RPT_Voice``` object the tract UI should be linked to
+  - ```reportVowel``` (boolean - optional): report current tongue index + diameter on hover
+  - ```style``` (CSSProperties) - a React CSS properties object that gets applied directly to the <canvas> element.
